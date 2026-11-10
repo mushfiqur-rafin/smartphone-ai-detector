@@ -18,6 +18,10 @@ from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
 
 from market_pricing import ebay_configured, fetch_ebay_market_price_cached, get_live_or_fallback_market_value
+from component_pricing import (
+    get_component_market_price,
+    price_component_list,
+)
 from streamlit_webrtc import RTCConfiguration, VideoProcessorBase, WebRtcMode, webrtc_streamer
 import timm
 import torch
@@ -3907,13 +3911,12 @@ def render_graphical_valuation_demo(
         device_type="phone",
     )
 
-    component_market_total = (
-        _demo_component_market_total(
-            predicted_class,
-            component_value_config,
-        )
-    )
-
+    # --------------------------------------------------------
+    # Component-level market pricing
+    # --------------------------------------------------------
+    # First build the same researched component rows used by the
+    # original app. These values remain the fallback when live eBay
+    # pricing is unavailable.
     component_rows = (
         _demo_component_values(
             predicted_class,
@@ -3925,6 +3928,96 @@ def render_graphical_valuation_demo(
             component_value_config,
         )
     )
+
+    # Enrich every component with the new pricing layer.
+    #
+    # Priority inside component_pricing.py:
+    #   1. Live eBay Browse API asking-price median (when configured)
+    #   2. data/component_value_config.json researched reference
+    #   3. The original value already present in this app
+    #
+    # The live value is deliberately kept separate from whole-phone
+    # CTIA valuation and material/recycling value.
+    live_component_rows = []
+
+    for row in component_rows:
+        enriched = dict(row)
+
+        component_name = str(
+            row.get("component_name")
+            or row.get("component")
+            or row.get("name")
+            or ""
+        ).strip()
+
+        fallback_value = row.get("estimated_value")
+
+        if component_name:
+            pricing_result = get_component_market_price(
+                predicted_class,
+                component_name,
+                fallback_value=fallback_value,
+            )
+
+            market_value = pricing_result.get("reference_value")
+
+            if market_value is not None:
+                try:
+                    enriched["estimated_value"] = float(market_value)
+                except (TypeError, ValueError):
+                    pass
+
+            enriched["component_price_source"] = pricing_result.get(
+                "source",
+                "Research component dataset",
+            )
+            enriched["component_price_basis"] = pricing_result.get(
+                "price_type",
+                "Stored replacement-part reference",
+            )
+            enriched["component_listing_count"] = pricing_result.get(
+                "listing_count",
+                0,
+            )
+            enriched["component_oem_median"] = (
+                (pricing_result.get("oem") or {}).get("median")
+            )
+            enriched["component_aftermarket_median"] = (
+                (pricing_result.get("aftermarket") or {}).get("median")
+            )
+            enriched["component_pricing_details"] = pricing_result
+            enriched["component_used_fallback"] = pricing_result.get(
+                "used_fallback",
+                True,
+            )
+
+        live_component_rows.append(enriched)
+
+    component_rows = live_component_rows
+
+    # Recalculate the displayed component total using the selected
+    # live/fallback reference values and quantities.
+    component_market_total = 0.0
+    component_market_value_found = False
+
+    for row in component_rows:
+        value = row.get("estimated_value")
+        if value is None:
+            continue
+
+        try:
+            value = float(value)
+            quantity = int(row.get("quantity", 1) or 1)
+        except (TypeError, ValueError):
+            continue
+
+        component_market_total += value * quantity
+        component_market_value_found = True
+
+    if component_market_value_found:
+        component_market_total = round(component_market_total, 2)
+    else:
+        component_market_total = None
 
     st.markdown("---")
     st.subheader(
@@ -4144,10 +4237,19 @@ def render_graphical_valuation_demo(
         "### 2. Internal component value deep dive"
     )
 
-    st.caption(
-        "Research-populated component market references for the predicted "
-        "phone. These values are separate from the CTIA whole-phone estimate."
-    )
+    if ebay_configured():
+        st.caption(
+            "Component market references use filtered current eBay asking prices "
+            "when suitable listings are available, with the researched dataset as "
+            "fallback. These values are separate from the CTIA whole-phone estimate."
+        )
+    else:
+        st.caption(
+            "Research-populated component market references for the predicted "
+            "phone. Live eBay component pricing will activate automatically after "
+            "your eBay API credentials are configured. These values are separate "
+            "from the CTIA whole-phone estimate."
+        )
 
     if component_rows:
         sorted_rows = sorted(
@@ -4180,40 +4282,36 @@ def render_graphical_valuation_demo(
             component_table = pd.DataFrame(
                 [
                     {
-                        "Component": row[
-                            "component_name"
-                        ],
-                        "Qty": row.get(
-                            "quantity",
-                            1,
-                        ),
+                        "Component": row["component_name"],
+                        "Qty": row.get("quantity", 1),
                         "Reference value": (
                             f"${float(row['estimated_value']):,.2f}"
-                            if row.get(
-                                "estimated_value"
-                            )
-                            is not None
+                            if row.get("estimated_value") is not None
                             else "—"
                         ),
                         "Part number": (
-                            row.get(
-                                "manufacturer_part_number"
-                            )
-                            or row.get(
-                                "part_number"
-                            )
+                            row.get("manufacturer_part_number")
+                            or row.get("part_number")
                             or "—"
                         ),
-                        "Basis": (
-                            "Online replacement-part reference"
-                            if row.get(
-                                "value_source"
-                            )
-                            == "online component reference price"
-                            else row.get(
-                                "value_source",
-                                "—",
-                            )
+                        "Source": row.get(
+                            "component_price_source",
+                            "Research component dataset",
+                        ),
+                        "Listings": (
+                            row.get("component_listing_count", 0)
+                            if row.get("component_listing_count", 0)
+                            else "—"
+                        ),
+                        "OEM median": (
+                            f"${float(row['component_oem_median']):,.2f}"
+                            if row.get("component_oem_median") is not None
+                            else "—"
+                        ),
+                        "Aftermarket median": (
+                            f"${float(row['component_aftermarket_median']):,.2f}"
+                            if row.get("component_aftermarket_median") is not None
+                            else "—"
                         ),
                     }
                     for row in sorted_rows
@@ -4278,12 +4376,23 @@ def render_graphical_valuation_demo(
                 f"${float(component_market_total):,.2f}",
             )
 
-        st.caption(
-            "Component figures are online replacement-part market "
-            "references from the researched dataset. They are not "
-            "guaranteed used-part resale prices, recycler payouts, "
-            "or CTIA-defined values."
-        )
+        if ebay_configured():
+            st.caption(
+                "Live component figures are median current eBay asking-price "
+                "references after model/component matching and outlier filtering. "
+                "OEM/aftermarket labels are inferred from listing titles. If a "
+                "suitable live result is unavailable, the researched component "
+                "dataset is used as fallback. These are not completed-sale prices, "
+                "whole-phone resale values, recycler payouts, recoverable-material "
+                "values, or CTIA-defined values."
+            )
+        else:
+            st.caption(
+                "Component figures currently use the researched replacement-part "
+                "dataset because eBay API access is not configured yet. They are "
+                "not guaranteed used-part resale prices, recycler payouts, "
+                "recoverable-material values, or CTIA-defined values."
+            )
 
     else:
         st.info(
