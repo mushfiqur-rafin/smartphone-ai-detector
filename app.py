@@ -7878,3 +7878,172 @@ def render_live_ebay_market_price(model_name, storage_gb=None, fallback_value=No
     c3.metric("Filtered range", f"${result['low_price']:,.0f}–${result['high_price']:,.0f}")
     st.caption("eBay US active listings. Median after model/storage matching and IQR outlier filtering. Asking-price reference, not sold-price data.")
     return result
+
+
+
+# ============================================================
+# FINAL LIGHT-THEME OVERRIDES
+# Keeps alerts, status messages, badges, tabs, and damage UI
+# readable on the app's white/light-gray design.
+# ============================================================
+st.markdown("""
+<style>
+/* ---------- Streamlit alert/status boxes ---------- */
+div[data-testid="stAlert"] {
+    background: #f5f5f5 !important;
+    color: #111111 !important;
+    border: 1px solid #d9d9d9 !important;
+    border-radius: 8px !important;
+}
+
+div[data-testid="stAlert"] *,
+div[data-testid="stAlert"] p,
+div[data-testid="stAlert"] span,
+div[data-testid="stAlert"] div {
+    color: #111111 !important;
+}
+
+div[data-testid="stAlert"] svg {
+    color: #333333 !important;
+    fill: #333333 !important;
+}
+
+/* Newer Streamlit success/info/warning/error containers */
+[data-baseweb="notification"] {
+    background-color: #f5f5f5 !important;
+    color: #111111 !important;
+    border: 1px solid #d9d9d9 !important;
+}
+
+[data-baseweb="notification"] * {
+    color: #111111 !important;
+}
+
+/* ---------- Status / confidence pills ---------- */
+/* Prevent dark-green/black badges in the light UI */
+div[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+    background: #eeeeee !important;
+    color: #111111 !important;
+    border-radius: 999px !important;
+    padding: 2px 7px !important;
+}
+
+div[data-testid="stMetric"] [data-testid="stMetricDelta"] *,
+div[data-testid="stMetricDelta"] svg {
+    color: #111111 !important;
+    fill: #111111 !important;
+}
+
+/* ---------- Metrics ---------- */
+div[data-testid="stMetric"] {
+    background: transparent !important;
+}
+
+div[data-testid="stMetricLabel"],
+div[data-testid="stMetricLabel"] *,
+div[data-testid="stMetricValue"],
+div[data-testid="stMetricValue"] * {
+    color: #111111 !important;
+}
+
+div[data-testid="stMetricValue"] {
+    font-size: 1.5rem !important;
+    line-height: 1.1 !important;
+}
+
+div[data-testid="stMetricLabel"] {
+    font-size: 0.9rem !important;
+}
+
+/* ---------- Tabs ---------- */
+button[data-baseweb="tab"] {
+    background: transparent !important;
+    color: #333333 !important;
+}
+
+button[data-baseweb="tab"] * {
+    color: #333333 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #111111 !important;
+    font-weight: 600 !important;
+}
+
+div[data-baseweb="tab-highlight"] {
+    background-color: #777777 !important;
+}
+
+/* ---------- Expanders ---------- */
+div[data-testid="stExpander"] {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    border-color: #dddddd !important;
+}
+
+div[data-testid="stExpander"] * {
+    color: #111111 !important;
+}
+
+/* ---------- Captions / help text ---------- */
+div[data-testid="stCaptionContainer"],
+div[data-testid="stCaptionContainer"] *,
+small {
+    color: #666666 !important;
+}
+
+/* ---------- Dataframes / tables ---------- */
+div[data-testid="stDataFrame"] {
+    color: #111111 !important;
+}
+
+/* ---------- Inputs ---------- */
+div[data-baseweb="input"] > div,
+div[data-baseweb="select"] > div,
+div[data-baseweb="textarea"] > div {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+}
+
+input, textarea {
+    color: #111111 !important;
+}
+
+/* ---------- File uploader ---------- */
+section[data-testid="stFileUploaderDropzone"] {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    border-color: #cccccc !important;
+}
+
+section[data-testid="stFileUploaderDropzone"] * {
+    color: #111111 !important;
+}
+
+/* ---------- Buttons ---------- */
+.stButton > button,
+.stDownloadButton > button {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #333333 !important;
+}
+
+.stButton > button *,
+.stDownloadButton > button * {
+    color: #111111 !important;
+}
+
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+    background-color: #f2f2f2 !important;
+    color: #000000 !important;
+}
+
+/* ---------- General text safety ---------- */
+.main p,
+.main li,
+.main label {
+    color: #111111;
+}
+</style>
+""", unsafe_allow_html=True)
