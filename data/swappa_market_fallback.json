@@ -1,0 +1,45 @@
+{
+  "metadata": {
+    "source": "Swappa Current Prices / marketplace listings",
+    "reference_date": "2026-11-10",
+    "currency": "USD",
+    "note": "Temporary dated market reference used while eBay API credentials are unavailable. These values are not CTIA-defined."
+  },
+  "models": {
+    "iphone_14": {
+      "display_name": "Apple iPhone 14",
+      "reference_price": 332.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "iphone_14_pro_max": {
+      "display_name": "Apple iPhone 14 Pro Max",
+      "reference_price": 549.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "iphone_15_pro": {
+      "display_name": "Apple iPhone 15 Pro",
+      "reference_price": 567.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "iphone_15_pro_max": {
+      "display_name": "Apple iPhone 15 Pro Max",
+      "reference_price": 650.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "s24_ultra": {
+      "display_name": "Samsung Galaxy S24 Ultra",
+      "reference_price": 617.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "s25_ultra": {
+      "display_name": "Samsung Galaxy S25 Ultra",
+      "reference_price": 722.0,
+      "basis": "Swappa Current Prices average"
+    },
+    "s25_edge": {
+      "display_name": "Samsung Galaxy S25 Edge",
+      "reference_price": 361.0,
+      "basis": "Swappa current starting listing price; not an average"
+    }
+  }
+}
