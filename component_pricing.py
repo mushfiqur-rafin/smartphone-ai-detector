@@ -799,3 +799,4 @@ def render_component_market_table(
 
     st.caption(result["note"])
     return result
+
