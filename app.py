@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
+
+from market_pricing import ebay_configured, fetch_ebay_market_price_cached, get_live_or_fallback_market_value
 from streamlit_webrtc import RTCConfiguration, VideoProcessorBase, WebRtcMode, webrtc_streamer
 import timm
 import torch
@@ -7848,3 +7850,31 @@ with mode[4]:
             "use the confidence threshold and add an unknown-device class for a "
             "production system."
         )
+
+# ===== LIVE EBAY MARKET PRICE HELPER =====
+def render_live_ebay_market_price(model_name, storage_gb=None, fallback_value=None):
+    result = get_live_or_fallback_market_value(model_name, storage_gb, fallback_value)
+    st.markdown("#### Live Market Price")
+    if result.get("used_fallback"):
+        if not ebay_configured():
+            st.info("Live eBay pricing is not configured. Add EBAY_CLIENT_ID and EBAY_CLIENT_SECRET in Streamlit Secrets. Using stored baseline.")
+        if result.get("market_value") is not None:
+            st.metric("Market baseline", f"${result['market_value']:,.2f}")
+            source = result.get("source", "Fallback reference")
+            basis = result.get("price_type", "")
+            ref_date = result.get("reference_date")
+            caption = f"Source: {source}"
+            if ref_date:
+                caption += f" · Reference date: {ref_date}"
+            if basis:
+                caption += f" · {basis}"
+            st.caption(caption)
+        else:
+            st.metric("Market baseline", "Unavailable")
+        return result
+    c1,c2,c3=st.columns(3)
+    c1.metric("Median asking price", f"${result['median_price']:,.2f}")
+    c2.metric("Listings used", result['listing_count'])
+    c3.metric("Filtered range", f"${result['low_price']:,.0f}–${result['high_price']:,.0f}")
+    st.caption("eBay US active listings. Median after model/storage matching and IQR outlier filtering. Asking-price reference, not sold-price data.")
+    return result
