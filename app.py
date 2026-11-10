@@ -8047,3 +8047,165 @@ section[data-testid="stFileUploaderDropzone"] * {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+
+# ============================================================
+# FINAL VISIBILITY FIX V2
+# Explicitly fixes Streamlit metric delta pills/icons and alert
+# containers that can stay dark under BaseWeb/Streamlit theming.
+# ============================================================
+st.markdown("""
+<style>
+
+/* ==========================================================
+   1. CONFIDENCE BADGES / METRIC DELTAS
+   ========================================================== */
+
+/* Whole delta pill */
+[data-testid="stMetricDelta"],
+div[data-testid="stMetricDelta"] {
+    background-color: #eeeeee !important;
+    background: #eeeeee !important;
+    color: #111111 !important;
+    border: 1px solid #dddddd !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+
+/* Everything inside the confidence pill */
+[data-testid="stMetricDelta"] *,
+[data-testid="stMetricDelta"] div,
+[data-testid="stMetricDelta"] span,
+[data-testid="stMetricDelta"] p {
+    color: #111111 !important;
+    background-color: transparent !important;
+    opacity: 1 !important;
+}
+
+/* Hide Streamlit's delta arrow/icon completely.
+   Confidence is not an increase/decrease metric, so the arrow
+   is misleading and was producing the black symbol. */
+[data-testid="stMetricDelta"] svg {
+    display: none !important;
+}
+
+/* Remove any pseudo-element/icon that a Streamlit version adds */
+[data-testid="stMetricDelta"]::before,
+[data-testid="stMetricDelta"]::after,
+[data-testid="stMetricDelta"] *::before,
+[data-testid="stMetricDelta"] *::after {
+    color: #111111 !important;
+    background: transparent !important;
+}
+
+/* ==========================================================
+   2. ALL STREAMLIT ALERT BOXES
+   ========================================================== */
+
+/* Outer alert wrapper */
+[data-testid="stAlert"],
+div[data-testid="stAlert"],
+div[role="alert"] {
+    background-color: #f4f4f4 !important;
+    background: #f4f4f4 !important;
+    color: #111111 !important;
+    border: 1px solid #d6d6d6 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+
+/* Streamlit/BaseWeb sometimes puts the dark background on
+   an inner div instead of stAlert itself. Override every layer. */
+[data-testid="stAlert"] > div,
+[data-testid="stAlert"] > div > div,
+[data-testid="stAlert"] [data-baseweb="notification"],
+div[role="alert"] > div,
+div[role="alert"] [data-baseweb="notification"],
+[data-baseweb="notification"] {
+    background-color: #f4f4f4 !important;
+    background: #f4f4f4 !important;
+    color: #111111 !important;
+    border-color: #d6d6d6 !important;
+    box-shadow: none !important;
+}
+
+/* Alert text */
+[data-testid="stAlert"] *,
+div[role="alert"] *,
+[data-baseweb="notification"] * {
+    color: #111111 !important;
+    opacity: 1 !important;
+}
+
+/* Alert icons: make visible dark gray */
+[data-testid="stAlert"] svg,
+div[role="alert"] svg,
+[data-baseweb="notification"] svg {
+    color: #333333 !important;
+    fill: #333333 !important;
+    opacity: 1 !important;
+}
+
+/* ==========================================================
+   3. MARKDOWN / CUSTOM INFO BOX SAFETY
+   ========================================================== */
+
+/* Any custom box using common Streamlit alert colors/classes */
+.stAlert,
+.element-container .stAlert {
+    background-color: #f4f4f4 !important;
+    color: #111111 !important;
+}
+
+/* Ensure paragraphs inside alert/custom status areas stay visible */
+[data-testid="stAlert"] p,
+[data-testid="stAlert"] li,
+[data-testid="stAlert"] strong,
+[data-testid="stAlert"] em,
+div[role="alert"] p,
+div[role="alert"] li,
+div[role="alert"] strong,
+div[role="alert"] em {
+    color: #111111 !important;
+}
+
+/* ==========================================================
+   4. METRIC TEXT
+   ========================================================== */
+[data-testid="stMetricLabel"],
+[data-testid="stMetricLabel"] *,
+[data-testid="stMetricValue"],
+[data-testid="stMetricValue"] * {
+    color: #111111 !important;
+    opacity: 1 !important;
+}
+
+/* ==========================================================
+   5. TAB VISIBILITY
+   ========================================================== */
+button[data-baseweb="tab"],
+button[data-baseweb="tab"] *,
+[role="tab"],
+[role="tab"] * {
+    color: #222222 !important;
+    opacity: 1 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"],
+button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #000000 !important;
+    font-weight: 700 !important;
+}
+
+/* ==========================================================
+   6. GENERAL LIGHT THEME TEXT SAFETY
+   ========================================================== */
+.stApp {
+    color: #111111 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
