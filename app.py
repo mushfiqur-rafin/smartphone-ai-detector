@@ -3990,6 +3990,9 @@ def render_graphical_valuation_demo(
                 "used_fallback",
                 True,
             )
+            enriched["component_live_lookup_error"] = pricing_result.get(
+                "live_lookup_error"
+            )
 
         live_component_rows.append(enriched)
 
@@ -4323,6 +4326,27 @@ def render_graphical_valuation_demo(
                 use_container_width=True,
                 hide_index=True,
             )
+
+            fallback_rows = [
+                row for row in sorted_rows
+                if row.get("component_live_lookup_error")
+            ]
+            if ebay_configured() and fallback_rows:
+                with st.expander("Live eBay lookup diagnostics"):
+                    st.caption(
+                        "These components used the researched fallback because "
+                        "the live eBay lookup did not produce a usable match."
+                    )
+                    for row in fallback_rows:
+                        st.markdown(f"**{row.get('component_name', 'Component')}**")
+                        st.write(row.get("component_live_lookup_error"))
+                        details = row.get("component_pricing_details") or {}
+                        for d in details.get("live_api_diagnostics", []) or []:
+                            st.caption(
+                                f"Query: {d.get('query')} · "
+                                f"API results: {d.get('api_result_count', 0)} · "
+                                f"Matched: {d.get('matched_count', 0)}"
+                            )
 
         with chart_col:
             st.markdown(
