@@ -50,6 +50,16 @@ MODEL_NAMES = {
     "s25_edge": "Samsung Galaxy S25 Edge",
 }
 
+MODEL_TITLE_ALIASES = {
+    "iphone_14": ["iphone 14", "a2649", "a2881", "a2882", "a2883", "a2884"],
+    "iphone_14_pro_max": ["iphone 14 pro max", "a2651", "a2893", "a2894", "a2895", "a2896"],
+    "iphone_15_pro": ["iphone 15 pro", "a2848", "a3101", "a3102", "a3104"],
+    "iphone_15_pro_max": ["iphone 15 pro max", "a2849", "a3105", "a3106", "a3108"],
+    "s24_ultra": ["s24 ultra", "s928", "sm-s928", "sm s928", "s928u", "s928b", "s928w", "s9280"],
+    "s25_ultra": ["s25 ultra", "s938", "sm-s938", "sm s938", "s938u", "s938b", "s938w", "s9380"],
+    "s25_edge": ["s25 edge", "s937", "sm-s937", "sm s937", "s937u", "s937b", "s937w", "s9370"],
+}
+
 MODEL_ALIASES = {
     "iphone 14": "iphone_14",
     "apple iphone 14": "iphone_14",
@@ -339,32 +349,27 @@ def _rule(component: str) -> Dict[str, Any]:
     }
 
 
+def _model_matches_title(title: str, model: str) -> bool:
+    t = re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+    key = normalize_model_key(model)
+    for alias in MODEL_TITLE_ALIASES.get(key, []):
+        a = re.sub(r"[^a-z0-9]+", " ", alias.lower()).strip()
+        if a and a in t:
+            return True
+    display = model_display_name(model).lower()
+    tokens = [x for x in re.findall(r"[a-z0-9]+", display) if x not in {"apple","samsung","galaxy"}]
+    return bool(tokens) and all(x in t for x in tokens)
+
 def _title_matches(title: str, model: str, component: str) -> bool:
     t = title.lower()
-    if any(x in t for x in GENERIC_EXCLUDE):
-        return False
-
-    model_name = model_display_name(model).lower()
-    # Require distinctive model tokens, not generic Apple/Samsung/Galaxy words.
-    tokens = [
-        x for x in re.findall(r"[a-z0-9]+", model_name)
-        if x not in {"apple", "samsung", "galaxy"}
-    ]
-    if not all(x in t for x in tokens):
-        return False
-
+    if any(x in t for x in GENERIC_EXCLUDE): return False
+    if not _model_matches_title(title, model): return False
     rule = _rule(component)
-    if any(x.lower() in t for x in rule.get("exclude", [])):
-        return False
-
-    includes = [x.lower() for x in rule.get("include_any", [])]
-    if includes and not any(x in t for x in includes):
-        return False
-
+    if any(x.lower() in t for x in rule.get("exclude", [])): return False
+    includes=[x.lower() for x in rule.get("include_any", [])]
+    if includes and not any(x in t for x in includes): return False
     for group in rule.get("require_any_groups", []):
-        if group and not any(x.lower() in t for x in group):
-            return False
-
+        if group and not any(x.lower() in t for x in group): return False
     return True
 
 
@@ -403,117 +408,46 @@ def _summary(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
-def fetch_live_component_price(
-    model: str,
-    component: str,
-    *,
-    limit: int = 100,
-) -> Dict[str, Any]:
-    """
-    Return current active eBay asking-price references for one component.
-    Uses the median after component/model matching and IQR outlier removal.
-    """
-    component = _normalize_component(component)
-    model_name = model_display_name(model)
-    rule = _rule(component)
-    query = f"{model_name} {rule['query']}"
+def _search_ebay_component_query(token, query, model, component, limit):
+    r=requests.get(EBAY_SEARCH_URL,headers={"Authorization":f"Bearer {token}","X-EBAY-C-MARKETPLACE-ID":EBAY_MARKETPLACE},params={"q":query,"filter":"priceCurrency:USD,deliveryCountry:US","limit":max(1,min(int(limit),200)),"auto_correct":"KEYWORD"},timeout=25)
+    r.raise_for_status(); items=r.json().get("itemSummaries",[]) or []
+    matched=[]; rejected=[]
+    for item in items:
+        title=str(item.get("title",""))
+        if not _title_matches(title,model,component):
+            if len(rejected)<5: rejected.append(title)
+            continue
+        try: price=float((item.get("price") or {}).get("value"))
+        except (TypeError,ValueError): continue
+        if price<=0: continue
+        matched.append({"title":title,"price":price,"currency":(item.get("price") or {}).get("currency","USD"),"condition":item.get("condition"),"quality_type":_quality_type(title),"url":item.get("itemWebUrl"),"seller":(item.get("seller") or {}).get("username")})
+    return {"query":query,"api_result_count":len(items),"matched_count":len(matched),"matched":matched,"rejected_examples":rejected}
 
+def fetch_live_component_price(model: str, component: str, *, limit: int = 100) -> Dict[str, Any]:
+    component=_normalize_component(component); model_name=model_display_name(model); key=normalize_model_key(model); rule=_rule(component)
     try:
-        token = _access_token()
-        r = requests.get(
-            EBAY_SEARCH_URL,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "X-EBAY-C-MARKETPLACE-ID": EBAY_MARKETPLACE,
-            },
-            params={
-                "q": query,
-                "filter": "conditions:{NEW|USED},priceCurrency:USD,deliveryCountry:US",
-                "limit": max(1, min(int(limit), 200)),
-                "auto_correct": "KEYWORD",
-            },
-            timeout=25,
-        )
-        r.raise_for_status()
-        items = r.json().get("itemSummaries", []) or []
-
-        rows = []
-        for item in items:
-            title = str(item.get("title", ""))
-            if not _title_matches(title, model, component):
-                continue
-            try:
-                price = float((item.get("price") or {}).get("value"))
-            except (TypeError, ValueError):
-                continue
-            if price <= 0:
-                continue
-            rows.append({
-                "title": title,
-                "price": price,
-                "currency": (item.get("price") or {}).get("currency", "USD"),
-                "condition": item.get("condition"),
-                "quality_type": _quality_type(title),
-                "url": item.get("itemWebUrl"),
-                "seller": (item.get("seller") or {}).get("username"),
-            })
-
-        raw_count = len(rows)
-        rows = _iqr_filter(rows)
-
+        token=_access_token(); queries=[f"{model_name} {rule['query']}"]
+        hw=next((a for a in MODEL_TITLE_ALIASES.get(key,[]) if a.startswith("sm-")),None)
+        if hw: queries.append(f"{hw} {rule['query']}")
+        diagnostics=[]; all_rows=[]; seen=set()
+        for query in queries:
+            d=_search_ebay_component_query(token,query,model,component,limit)
+            diagnostics.append({k:d[k] for k in ("query","api_result_count","matched_count","rejected_examples")})
+            for row in d["matched"]:
+                ident=(row.get("url") or row["title"],row["price"])
+                if ident not in seen: seen.add(ident); all_rows.append(row)
+            if len(all_rows)>=8: break
+        raw_count=len(all_rows); rows=_iqr_filter(all_rows)
         if not rows:
-            return {
-                "ok": False,
-                "model": model_name,
-                "component": component,
-                "query": query,
-                "source": "eBay Browse API",
-                "price_type": "Current active asking prices",
-                "reference_value": None,
-                "listing_count": 0,
-                "raw_listing_count": raw_count,
-                "error": "No suitable component listings found.",
-                "listings": [],
-            }
-
-        overall = _summary(rows)
-        oem_rows = [x for x in rows if x["quality_type"] == "OEM/original indicated"]
-        aft_rows = [x for x in rows if x["quality_type"] == "Aftermarket/replacement indicated"]
-
-        return {
-            "ok": True,
-            "model": model_name,
-            "component": component,
-            "query": query,
-            "source": "eBay Browse API",
-            "price_type": "Current active asking prices",
-            "reference_value": overall["median"],
-            "median": overall["median"],
-            "mean": overall["mean"],
-            "low": overall["min"],
-            "high": overall["max"],
-            "listing_count": overall["count"],
-            "raw_listing_count": raw_count,
-            "oem": _summary(oem_rows),
-            "aftermarket": _summary(aft_rows),
-            "listings": rows[:20],
-            "error": None,
-        }
-
+            return {"ok":False,"model":model_name,"component":component,"query":queries[0],"queries_tried":queries,"source":"eBay Browse API","price_type":"Current active asking prices","reference_value":None,"listing_count":0,"raw_listing_count":raw_count,"api_diagnostics":diagnostics,"error":"eBay API responded, but no suitable matching component listings remained after filtering.","listings":[]}
+        overall=_summary(rows); oem=[x for x in rows if x["quality_type"]=="OEM/original indicated"]; aft=[x for x in rows if x["quality_type"]=="Aftermarket/replacement indicated"]
+        return {"ok":True,"model":model_name,"component":component,"query":queries[0],"queries_tried":queries,"source":"eBay Browse API","price_type":"Current active asking prices","reference_value":overall["median"],"median":overall["median"],"mean":overall["mean"],"low":overall["min"],"high":overall["max"],"listing_count":overall["count"],"raw_listing_count":raw_count,"oem":_summary(oem),"aftermarket":_summary(aft),"api_diagnostics":diagnostics,"listings":rows[:20],"error":None}
+    except requests.HTTPError as exc:
+        try: body=exc.response.text[:800]
+        except Exception: body=""
+        return {"ok":False,"model":model_name,"component":component,"query":f"{model_name} {rule['query']}","source":"eBay Browse API","price_type":"Current active asking prices","reference_value":None,"listing_count":0,"raw_listing_count":0,"api_diagnostics":[],"error":f"eBay HTTP error: {exc}. {body}","listings":[]}
     except Exception as exc:
-        return {
-            "ok": False,
-            "model": model_name,
-            "component": component,
-            "query": query,
-            "source": "eBay Browse API",
-            "price_type": "Current active asking prices",
-            "reference_value": None,
-            "listing_count": 0,
-            "raw_listing_count": 0,
-            "error": str(exc),
-            "listings": [],
-        }
+        return {"ok":False,"model":model_name,"component":component,"query":f"{model_name} {rule['query']}","source":"eBay Browse API","price_type":"Current active asking prices","reference_value":None,"listing_count":0,"raw_listing_count":0,"api_diagnostics":[],"error":str(exc),"listings":[]}
 
 
 if st is not None:
@@ -639,14 +573,20 @@ def get_component_market_price(
 
     eBay live asking-price reference -> researched JSON -> supplied fallback.
     """
+    live_failure = None
     if ebay_configured():
         live = fetch_live_component_price_cached(model, component)
         if live.get("ok") and live.get("reference_value") is not None:
             live["used_fallback"] = False
             return live
+        live_failure = live
 
     stored = _fallback_component(model, component)
     if stored:
+        if live_failure:
+            stored["live_lookup_error"] = live_failure.get("error")
+            stored["live_api_diagnostics"] = live_failure.get("api_diagnostics", [])
+            stored["live_queries_tried"] = live_failure.get("queries_tried", [])
         return stored
 
     if fallback_value is not None:
@@ -799,4 +739,3 @@ def render_component_market_table(
 
     st.caption(result["note"])
     return result
-
