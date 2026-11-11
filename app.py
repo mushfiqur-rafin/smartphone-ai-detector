@@ -1177,7 +1177,44 @@ st.markdown(
         margin-bottom: 0.35rem !important;
     }
 
-    </style>
+    
+
+        .ebay-market-block {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #d8dde5;
+        }
+        .ebay-market-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.10em;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        .ebay-market-price {
+            margin-top: 3px;
+            font-size: 1.65rem;
+            line-height: 1.15;
+            font-weight: 750;
+            color: #111111;
+        }
+        .ebay-market-count,
+        .ebay-market-range,
+        .ebay-market-note,
+        .ebay-market-unavailable {
+            margin-top: 3px;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            color: #4b5563;
+        }
+        .ebay-market-unavailable {
+            font-weight: 650;
+            color: #111111;
+        }
+        .ebay-market-note {
+            color: #7b8491;
+        }
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -4619,6 +4656,65 @@ def render_prediction(
                 "Try a clearer rear-camera or full-device view."
             )
 
+        # --------------------------------------------------------
+        # Live eBay whole-phone market price
+        # --------------------------------------------------------
+        # This is a market baseline from current active eBay asking
+        # prices. It is intentionally separate from the CTIA-adjusted
+        # valuation shown later in the app.
+        ebay_market = None
+        ebay_price_html = ""
+
+        if ebay_configured():
+            try:
+                ebay_market = fetch_ebay_market_price_cached(
+                    top["class_name"],
+                    None,  # Storage is unknown from an exterior photo.
+                )
+            except Exception:
+                ebay_market = None
+
+        if ebay_market and ebay_market.get("ok"):
+            median_price = ebay_market.get("median_price")
+            low_price = ebay_market.get("low_price")
+            high_price = ebay_market.get("high_price")
+            listing_count = ebay_market.get("listing_count", 0)
+
+            if median_price is not None:
+                range_html = ""
+                if low_price is not None and high_price is not None:
+                    range_html = (
+                        f'<div class="ebay-market-range">'
+                        f'Filtered range: ${float(low_price):,.0f} – '
+                        f'${float(high_price):,.0f}</div>'
+                    )
+
+                ebay_price_html = (
+                    '<div class="ebay-market-block">'
+                    '<div class="ebay-market-label">LIVE EBAY MARKET PRICE</div>'
+                    f'<div class="ebay-market-price">${float(median_price):,.0f}</div>'
+                    f'<div class="ebay-market-count">Median of {int(listing_count)} '
+                    'filtered current listings</div>'
+                    f'{range_html}'
+                    '<div class="ebay-market-note">Current asking-price reference · eBay US</div>'
+                    '</div>'
+                )
+        elif ebay_configured():
+            ebay_price_html = (
+                '<div class="ebay-market-block">'
+                '<div class="ebay-market-label">LIVE EBAY MARKET PRICE</div>'
+                '<div class="ebay-market-unavailable">Live price unavailable</div>'
+                '<div class="ebay-market-note">No suitable whole-phone listings passed the current filters.</div>'
+                '</div>'
+            )
+        else:
+            ebay_price_html = (
+                '<div class="ebay-market-block">'
+                '<div class="ebay-market-label">LIVE EBAY MARKET PRICE</div>'
+                '<div class="ebay-market-unavailable">eBay API not configured</div>'
+                '</div>'
+            )
+
         st.markdown(
             f"""
             <div class="prediction-card">
@@ -4627,6 +4723,7 @@ def render_prediction(
                 <div class="confidence">
                     Confidence: {top["confidence"] * 100:.2f}%
                 </div>
+                {ebay_price_html}
             </div>
             """,
             unsafe_allow_html=True,
